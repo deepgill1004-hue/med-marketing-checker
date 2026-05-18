@@ -1,0 +1,15 @@
+# Node modules（若未來引入）
+node_modules/
+
+# 測試輸出
+test_output.txt
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/

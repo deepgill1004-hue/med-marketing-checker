@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>醫美行銷檢查器 · 蘇菲 IP 內建工具</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          sophie: { pink: '#ec4899', rose: '#fb7185', mint: '#10b981', amber: '#f59e0b', danger: '#ef4444', ink: '#1f2937', cream: '#fdf2f8' },
+        },
+        fontFamily: { hand: ['"Noto Sans TC"', 'system-ui', 'sans-serif'] }
+      }
+    }
+  };
+</script>
+<style>
+  body { font-family: "Noto Sans TC", system-ui, -apple-system, sans-serif; }
+  .gradient-bg { background: linear-gradient(135deg, #fdf2f8 0%, #fff7ed 50%, #ecfeff 100%); }
+  .highlight-red { background: linear-gradient(180deg, transparent 60%, #fecaca 60%); padding: 0 2px; border-radius: 3px; cursor: help; }
+  .highlight-yellow { background: linear-gradient(180deg, transparent 60%, #fef08a 60%); padding: 0 2px; border-radius: 3px; cursor: help; }
+  .tab-active { background: white; color: #ec4899; box-shadow: 0 -2px 8px rgba(236, 72, 153, 0.1); }
+  .scroll-thin::-webkit-scrollbar { width: 6px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 3px; }
+  details summary { cursor: pointer; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+  .badge-red { background: #fee2e2; color: #b91c1c; }
+  .badge-yellow { background: #fef3c7; color: #92400e; }
+  .badge-mint { background: #d1fae5; color: #065f46; }
+  .badge-pink { background: #fce7f3; color: #be185d; }
+  .card-shadow { box-shadow: 0 4px 20px rgba(236, 72, 153, 0.08); }
+  textarea:focus, input:focus { outline: 2px solid #ec4899; outline-offset: 2px; }
+  .btn-primary { background: linear-gradient(135deg, #ec4899, #fb7185); color: white; transition: all .2s; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(236, 72, 153, 0.3); }
+  .btn-primary:disabled { background: #d1d5db; transform: none; box-shadow: none; cursor: not-allowed; }
+  .pulse-dot::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ec4899; margin-right: 6px; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .score-ring { transform: rotate(-90deg); }
+</style>
+</head>
+<body class="gradient-bg min-h-screen">
+
+<!-- Header -->
+<header class="bg-white/80 backdrop-blur border-b border-pink-100 sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-sophie-pink to-sophie-rose flex items-center justify-center text-white text-xl font-bold">蘇</div>
+      <div>
+        <h1 class="text-lg font-bold text-sophie-ink">醫美行銷檢查器</h1>
+        <p class="text-xs text-gray-500">合規 × 爆款 雙引擎 · v0.1</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 bg-pink-50 rounded-full p-1">
+      <button id="mode-personal" class="px-4 py-1.5 rounded-full text-sm font-medium tab-active transition">個人 IP 模式</button>
+      <button id="mode-clinic" class="px-4 py-1.5 rounded-full text-sm font-medium text-gray-600 hover:text-pink-600 transition">診所廣告模式</button>
+    </div>
+  </div>
+</header>
+
+<!-- Mode description bar -->
+<div id="mode-desc" class="bg-amber-50 border-b border-amber-100">
+  <div class="max-w-7xl mx-auto px-6 py-2 text-xs text-amber-800 flex items-center gap-2">
+    <span>💡</span>
+    <span id="mode-desc-text"></span>
+  </div>
+</div>
+
+<!-- Main -->
+<main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- LEFT: Input -->
+  <section class="bg-white rounded-3xl p-6 card-shadow">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-bold text-sophie-ink flex items-center gap-2">
+        <span class="w-1.5 h-5 bg-sophie-pink rounded-full"></span>
+        貼妳的素材
+      </h2>
+      <span class="text-xs text-gray-400" id="char-count">0 字</span>
+    </div>
+
+    <!-- Platform selector -->
+    <div class="mb-3 flex flex-wrap gap-2">
+      <span class="text-xs text-gray-500 self-center mr-1">投放平台</span>
+      <button class="platform-btn badge badge-pink" data-platform="FB">FB</button>
+      <button class="platform-btn badge bg-gray-100 text-gray-600" data-platform="IG">IG</button>
+      <button class="platform-btn badge bg-gray-100 text-gray-600" data-platform="Threads">Threads</button>
+      <button class="platform-btn badge bg-gray-100 text-gray-600" data-platform="小紅書">小紅書</button>
+      <button class="platform-btn badge bg-gray-100 text-gray-600" data-platform="LINE_OA">LINE OA</button>
+      <button class="platform-btn badge bg-gray-100 text-gray-600" data-platform="LinkedIn">LinkedIn</button>
+    </div>
+
+    <!-- ✨ 自動生成面板 -->
+    <details class="mb-4 border border-pink-200 rounded-2xl bg-gradient-to-br from-pink-50 to-rose-50" open>
+      <summary class="px-4 py-3 font-bold text-sm text-pink-700 flex items-center gap-2">
+        <span class="text-lg">✨</span>
+        <span>給主題自動生成爆款合規文案</span>
+        <span class="text-xs font-normal text-gray-500 ml-auto">▼ 展開／收合</span>
+      </summary>
+      <div class="px-4 pb-4 space-y-3">
+        <!-- 合作診所切換 -->
+        <div class="flex items-center gap-2 p-2 bg-white/70 rounded-xl">
+          <input id="gen-clinic-lidai" type="checkbox" class="w-4 h-4 accent-pink-500">
+          <label for="gen-clinic-lidai" class="text-xs text-gray-700 flex-1 cursor-pointer">
+            <b>使用麗得醫美整形外科素材</b>
+            <span class="text-gray-500">（陳錫根院長＋手術療程，自動切診所模式）</span>
+          </label>
+        </div>
+
+        <div>
+          <label class="text-xs text-gray-600 block mb-1">療程／主題</label>
+          <input id="gen-topic" type="text" placeholder="例：玻尿酸、肉毒、電波、童顏針、PRP、皮秒" class="w-full px-3 py-2 border border-pink-200 rounded-xl text-sm focus:border-pink-400">
+          <select id="gen-topic-clinic" class="w-full px-3 py-2 border border-pink-200 rounded-xl text-sm bg-white hidden">
+            <option value="隆乳手術">隆乳手術（魔滴／女王波）</option>
+            <option value="眼袋手術">眼袋手術（內開／外開）</option>
+            <option value="眼皮手術">眼皮手術（雙眼皮／提眼瞼肌）</option>
+            <option value="拉皮手術">拉皮手術（額／中下臉 SMAS）</option>
+            <option value="莢膜攣縮處理">莢膜攣縮處理（藥物／手術）</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">內容類型</label>
+            <select id="gen-type" class="w-full px-3 py-2 border border-pink-200 rounded-xl text-sm bg-white">
+              <option value="faq_qa">FAQ 解答型（最高收藏）</option>
+              <option value="comparison">比較選擇型（A vs B）</option>
+              <option value="pain_point">痛點共鳴型（高分享）</option>
+              <option value="reverse">反向勸退型（建立信任）</option>
+              <option value="knowledge">衛教知識型（SEO 資產）</option>
+              <option value="story">故事型（高完讀）</option>
+              <option value="timeline">時間線體驗型（小紅書愛）</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">目標族群（選填）</label>
+            <input id="gen-audience" type="text" placeholder="例：30+ 女性、上班族媽媽" class="w-full px-3 py-2 border border-pink-200 rounded-xl text-sm focus:border-pink-400">
+          </div>
+        </div>
+        <div id="gen-compare-wrap" class="hidden">
+          <label class="text-xs text-gray-600 block mb-1">比較對象</label>
+          <input id="gen-compare" type="text" placeholder="例：肉毒、童顏針（會與主題比較）" class="w-full px-3 py-2 border border-pink-200 rounded-xl text-sm focus:border-pink-400">
+        </div>
+        <button id="btn-generate" class="btn-primary w-full py-3 rounded-2xl font-bold text-sm">
+          ✨ 生成文案（自動套合規檢查）
+        </button>
+        <p class="text-xs text-gray-500 leading-relaxed">
+          生成的文案會自動：① 依平台調整長度 ② 套爆款 Hook + 結構模板 ③ 自動避開 108 條紅線詞 ④ 補合規 CTA ⑤ 再跑一次合規檢查確認乾淨
+        </p>
+      </div>
+    </details>
+
+    <textarea
+      id="input-text"
+      rows="14"
+      class="w-full p-4 border border-pink-100 rounded-2xl text-sm leading-relaxed resize-none focus:border-pink-300 transition"
+      placeholder="把妳要發的文案貼這裡。可以包含 hashtag、emoji、價格資訊。&#10;&#10;範例：&#10;母親節限時優惠！買一送一！我們是全台最有效的肉毒，保證讓妳立即見效，無痛無副作用，超多名人代言！前 5 名加 LINE 還送免費諮詢..."
+    ></textarea>
+
+    <!-- Image OCR -->
+    <div class="mt-4 border-2 border-dashed border-pink-200 rounded-2xl p-4 hover:border-pink-400 transition relative">
+      <input type="file" id="image-upload" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer">
+      <div class="text-center text-sm text-gray-500">
+        <div class="text-2xl mb-1">📷</div>
+        <div>或上傳圖檔（自動 OCR 抓字 + 偵測違規元素）</div>
+        <div class="text-xs text-gray-400 mt-1" id="ocr-status"></div>
+      </div>
+    </div>
+
+    <!-- Image preview -->
+    <div id="image-preview-wrap" class="mt-3 hidden">
+      <img id="image-preview" class="w-full rounded-xl border border-pink-100" />
+    </div>
+
+    <!-- Action buttons -->
+    <div class="mt-5 grid grid-cols-3 gap-2">
+      <button id="btn-check" class="btn-primary col-span-2 py-3.5 rounded-2xl font-bold text-base">
+        🔍 一鍵檢查 + 優化
+      </button>
+      <button id="btn-demo" class="py-3.5 rounded-2xl font-medium text-sm bg-pink-50 text-pink-700 hover:bg-pink-100 transition">
+        📝 載入示範
+      </button>
+    </div>
+
+    <p class="text-xs text-gray-400 text-center mt-3">v0.2 · 108 紅線詞 + 35 黃線詞 + 17 結構違規 + 25 Hook 公式</p>
+  </section>
+
+  <!-- RIGHT: Results -->
+  <section class="space-y-6">
+
+    <!-- 合規檢查卡 -->
+    <div class="bg-white rounded-3xl p-6 card-shadow">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-sophie-ink flex items-center gap-2">
+          <span class="w-1.5 h-5 bg-sophie-mint rounded-full"></span>
+          合規檢查
+        </h2>
+        <div id="risk-badge" class="badge badge-mint">待檢測</div>
+      </div>
+
+      <!-- Score visualization -->
+      <div class="flex items-center gap-4 mb-5 p-4 bg-gradient-to-br from-pink-50 to-amber-50 rounded-2xl">
+        <div class="relative w-20 h-20 flex-shrink-0">
+          <svg class="w-full h-full score-ring">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="#fce7f3" stroke-width="8"/>
+            <circle id="score-circle" cx="40" cy="40" r="34" fill="none" stroke="#ec4899" stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="213.6" stroke-dashoffset="213.6" style="transition: stroke-dashoffset .6s ease, stroke .3s ease"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center font-bold text-lg text-sophie-ink" id="score-num">--</div>
+        </div>
+        <div class="flex-1">
+          <div class="text-xs text-gray-500 mb-1">合規分數</div>
+          <div class="text-sm text-gray-700" id="score-summary">請貼上素材後點檢查</div>
+        </div>
+      </div>
+
+      <!-- Highlighted text -->
+      <div class="mb-4">
+        <div class="text-xs text-gray-500 mb-2 flex items-center justify-between">
+          <span>違規詞高亮預覽</span>
+          <span class="text-xs"><span class="badge badge-red mr-1">紅</span>禁用 <span class="badge badge-yellow mr-1 ml-1">黃</span>有條件</span>
+        </div>
+        <div id="highlighted-text" class="bg-gray-50 rounded-xl p-4 text-sm leading-relaxed min-h-[80px] scroll-thin max-h-60 overflow-y-auto whitespace-pre-wrap break-words">
+          <span class="text-gray-400">尚未檢測</span>
+        </div>
+      </div>
+
+      <!-- Violation list -->
+      <div>
+        <div class="text-xs text-gray-500 mb-2">違規詳情</div>
+        <div id="violations-list" class="space-y-2 max-h-72 overflow-y-auto scroll-thin">
+          <div class="text-sm text-gray-400 italic">尚未檢測</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 爆款優化卡 -->
+    <div class="bg-white rounded-3xl p-6 card-shadow">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-sophie-ink flex items-center gap-2">
+          <span class="w-1.5 h-5 bg-sophie-pink rounded-full"></span>
+          爆款優化
+        </h2>
+        <span class="text-xs text-gray-500" id="optimize-platform-tag"></span>
+      </div>
+
+      <!-- Suggested hooks -->
+      <div class="mb-4">
+        <div class="text-xs text-gray-500 mb-2">推薦 Hook 改寫（依平台 + 內容主題）</div>
+        <div id="hooks-suggestion" class="space-y-2">
+          <div class="text-sm text-gray-400 italic">尚未檢測</div>
+        </div>
+      </div>
+
+      <!-- Rewrite preview -->
+      <div class="mb-4">
+        <div class="text-xs text-gray-500 mb-2">合規重寫版（自動替換違規詞）</div>
+        <div id="rewrite-preview" class="bg-gradient-to-br from-pink-50 to-amber-50 rounded-xl p-4 text-sm leading-relaxed min-h-[80px] whitespace-pre-wrap break-words">
+          <span class="text-gray-400">尚未檢測</span>
+        </div>
+        <button id="btn-copy-rewrite" class="hidden mt-2 text-xs text-pink-600 hover:underline">📋 複製重寫版</button>
+      </div>
+
+      <!-- Structure recommendation -->
+      <div class="mb-4">
+        <div class="text-xs text-gray-500 mb-2">建議內文結構</div>
+        <div id="structure-rec" class="text-sm text-gray-600 italic">尚未檢測</div>
+      </div>
+
+      <!-- Hashtag + 視覺建議 -->
+      <div class="mb-4 grid grid-cols-2 gap-3">
+        <div>
+          <div class="text-xs text-gray-500 mb-2">Hashtag 建議</div>
+          <div id="hashtag-rec" class="flex flex-wrap gap-1 text-xs">
+            <span class="text-gray-400 italic">尚未檢測</span>
+          </div>
+        </div>
+        <div>
+          <div class="text-xs text-gray-500 mb-2">封面/視覺建議</div>
+          <div id="visual-rec" class="text-xs text-gray-600 leading-relaxed">
+            <span class="text-gray-400 italic">尚未檢測</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 平台規格提示 -->
+      <div class="mb-3 p-3 bg-amber-50 rounded-xl text-xs text-amber-800" id="platform-spec-tip">
+        <span class="text-gray-400 italic">尚未檢測</span>
+      </div>
+
+      <!-- Score breakdown -->
+      <details class="border-t border-gray-100 pt-3">
+        <summary class="text-xs text-pink-600 hover:underline">▸ 看完整爆款評分（6 維度）</summary>
+        <div id="score-breakdown" class="mt-3 space-y-2 text-xs"></div>
+      </details>
+    </div>
+
+    <!-- 自動配圖卡 -->
+    <div class="bg-white rounded-3xl p-6 card-shadow" id="image-card" style="display:none">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-sophie-ink flex items-center gap-2">
+          <span class="w-1.5 h-5 bg-sophie-rose rounded-full"></span>
+          自動配圖（一篇 ≥ 2 張）
+        </h2>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-500">配色</label>
+          <select id="image-theme" class="text-xs border border-pink-200 rounded-lg px-2 py-1 bg-white">
+            <option value="warm-trust" selected>溫柔醫美＋信任專業</option>
+            <option value="trust-warm">信任專業＋溫柔醫美</option>
+            <option value="luxe-tech">高級感＋潔淨科技</option>
+            <option value="tech-luxe">潔淨科技＋高級感</option>
+          </select>
+          <button id="btn-regen-images" class="text-xs text-pink-600 hover:underline">🔄 重新生圖</button>
+        </div>
+      </div>
+      <div id="image-grid" class="grid grid-cols-2 gap-3"></div>
+      <p class="text-xs text-gray-400 mt-3">點圖片下方按鈕可下載 PNG。自動配圖只是初稿，正式發布前建議再用妳的視覺風格調整。</p>
+    </div>
+
+    <!-- 心法卡 -->
+    <div class="bg-gradient-to-br from-pink-100 via-amber-50 to-emerald-50 rounded-3xl p-5 card-shadow">
+      <h3 class="text-sm font-bold text-sophie-ink mb-3 flex items-center gap-2">
+        <span>💡</span> 蘇菲心法
+      </h3>
+      <ul id="golden-rules" class="space-y-1.5 text-xs text-gray-700 leading-relaxed"></ul>
+    </div>
+
+  </section>
+</main>
+
+<!-- Footer -->
+<footer class="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-400">
+  <p>蘇菲 IP 專屬工具 · 規則庫依台灣醫療法 §84-87、化粧品法 §10、藥事法 §65-70、公平交易法 §21 · 法源僅供初步判讀，最終以衛生局個案認定為準</p>
+  <p class="mt-1">研究 agent 持續補強規則中 · 工具會隨詞庫升級越來越準</p>
+</footer>
+
+<script src="data/rules.js"></script>
+<script src="data/optimizer.js"></script>
+<script src="data/industry_data.js"></script>
+<script src="data/generator.js"></script>
+<script src="data/clinic_lidai.js"></script>
+<script src="data/image_gen.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
