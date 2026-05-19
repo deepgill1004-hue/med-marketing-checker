@@ -173,9 +173,15 @@ ${ctx.compareWith ? "比較對象：" + ctx.compareWith : ""}
         messages: [{ role: "user", content: userMessage }],
         tools: [
           {
-            type: "web_search_20250604",
+            type: "web_search_20250305",
             name: "web_search",
             max_uses: 5,
+            user_location: {
+              type: "approximate",
+              country: "TW",
+              city: "Taipei",
+              timezone: "Asia/Taipei",
+            },
           },
         ],
       }),
