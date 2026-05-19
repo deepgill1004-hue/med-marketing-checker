@@ -577,6 +577,168 @@
 
   if (btnGenerate) btnGenerate.addEventListener('click', generateContent);
 
+  // ===== Settings Modal（API key 管理）=====
+  const settingsModal = $('settings-modal');
+  const btnSettings = $('btn-settings');
+  const btnCloseSettings = $('btn-close-settings');
+  const apiKeyInput = $('api-key-input');
+  const btnTestApi = $('btn-test-api');
+  const btnSaveApi = $('btn-save-api');
+  const btnClearApi = $('btn-clear-api');
+  const apiStatus = $('api-status');
+
+  function openSettings() {
+    if (typeof AI_GEN !== 'undefined' && AI_GEN.hasKey()) {
+      apiKeyInput.value = AI_GEN.getKey();
+      apiStatus.innerHTML = '<span class="text-emerald-600">✓ 已儲存 API key（顯示為遮蔽，可重新貼）</span>';
+    } else {
+      apiStatus.innerHTML = '<span class="text-amber-600">⚠ 尚未設定 API key</span>';
+    }
+    settingsModal.classList.remove('hidden');
+  }
+  function closeSettings() { settingsModal.classList.add('hidden'); }
+
+  if (btnSettings) btnSettings.addEventListener('click', (e) => { e.preventDefault(); openSettings(); });
+  if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettings);
+  if (settingsModal) settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) closeSettings();
+  });
+
+  if (btnSaveApi) btnSaveApi.addEventListener('click', () => {
+    const k = apiKeyInput.value.trim();
+    if (!k.startsWith('sk-ant-')) {
+      apiStatus.innerHTML = '<span class="text-red-600">⚠ API key 格式不對，應該以 sk-ant- 開頭</span>';
+      return;
+    }
+    AI_GEN.setKey(k);
+    apiStatus.innerHTML = '<span class="text-emerald-600">✓ 已儲存到瀏覽器 localStorage</span>';
+  });
+
+  if (btnTestApi) btnTestApi.addEventListener('click', async () => {
+    const k = apiKeyInput.value.trim();
+    if (k) AI_GEN.setKey(k);
+    apiStatus.innerHTML = '<span class="text-pink-600 pulse-dot">測試中⋯</span>';
+    try {
+      const reply = await AI_GEN.testConnection();
+      apiStatus.innerHTML = `<span class="text-emerald-600">✓ 連線成功！Claude 回應：「${reply}」</span>`;
+    } catch (err) {
+      apiStatus.innerHTML = `<span class="text-red-600">✗ ${err.message}</span>`;
+    }
+  });
+
+  if (btnClearApi) btnClearApi.addEventListener('click', () => {
+    if (confirm('確定要清除已存的 API key？')) {
+      AI_GEN.clearKey();
+      apiKeyInput.value = '';
+      apiStatus.innerHTML = '<span class="text-gray-500">已清除</span>';
+    }
+  });
+
+  // ===== AI 即時生成 =====
+  const btnAiGenerate = $('btn-ai-generate');
+  if (btnAiGenerate) btnAiGenerate.addEventListener('click', async () => {
+    if (typeof AI_GEN === 'undefined') { alert('AI 引擎未載入'); return; }
+    if (!AI_GEN.hasKey()) {
+      openSettings();
+      apiStatus.innerHTML = '<span class="text-amber-600">⚠ 請先設定 API key 才能使用 AI 即時生成</span>';
+      return;
+    }
+
+    const useClinic = genClinicCheck && genClinicCheck.checked;
+    const topicRaw = useClinic ? genTopicClinic.value : ($('gen-topic').value || '').trim();
+    if (!topicRaw) {
+      alert('請先填主題或勾麗得選療程');
+      return;
+    }
+    const typeId = $('gen-type').value;
+    const audience = ($('gen-audience').value || '').trim();
+    const compareWith = ($('gen-compare')?.value || '').trim();
+
+    // UI 提示
+    btnAiGenerate.disabled = true;
+    const originalText = btnAiGenerate.innerHTML;
+    btnAiGenerate.innerHTML = '<span class="pulse-dot">AI 即時搜尋＋生成中⋯ 約 30-60 秒</span>';
+
+    els.inputText.value = '⏳ AI 正在執行：\n\n1. 搜尋衛福部最近 30 天醫美公告\n2. 抓取「' + topicRaw + '」最新趨勢與統計\n3. 分析「' + state.platform + '」近期同主題爆款\n4. 餵入 Claude 即時生成符合法規的爆款文案\n\n預計 30-60 秒，請稍候⋯';
+    state.text = els.inputText.value;
+    els.charCount.textContent = `${state.text.length} 字`;
+
+    try {
+      const ctx = {
+        topic: topicRaw,
+        topicSafe: useClinic ? topicRaw : (GENERATOR.topic_alias[topicRaw] || topicRaw),
+        audience, compareWith,
+        platform: state.platform,
+        mode: state.mode,
+        contentTypeId: typeId,
+        clinic: useClinic ? CLINIC_LIDAI : null,
+      };
+      const result = await AI_GEN.generate(ctx);
+
+      // 灌入主編輯區
+      els.inputText.value = result.text;
+      state.text = result.text;
+      els.charCount.textContent = `${result.text.length} 字`;
+
+      // 跑合規檢查
+      els.btnCheck.click();
+
+      // 自動配圖
+      const ct = GENERATOR.content_types[typeId];
+      setTimeout(() => {
+        generateImages({
+          topic: topicRaw,
+          contentTypeLabel: ct.label,
+          fullText: state.text,
+          brand: useClinic ? "麗得醫美整形外科 · 蘇菲 IP" : "蘇菲 IP",
+        });
+
+        // 顯示搜尋來源
+        if (result.sources && result.sources.length > 0) {
+          showSearchSources(result.sources, result.usage);
+        }
+      }, 150);
+
+    } catch (err) {
+      els.inputText.value = `❌ AI 生成失敗：${err.message}\n\n可能原因：\n• API key 無效或額度不足\n• 網路連線問題\n• Anthropic API 暫時故障\n\n建議：先用「📝 本地範本生成」應急，或到 ⚙️ 設定 重試連線。`;
+      state.text = els.inputText.value;
+    } finally {
+      btnAiGenerate.disabled = false;
+      btnAiGenerate.innerHTML = originalText;
+    }
+  });
+
+  // 顯示搜尋來源（即時抓料證據）
+  function showSearchSources(sources, usage) {
+    let html = '<div class="mt-4 p-4 bg-blue-50 rounded-2xl text-xs">';
+    html += '<div class="font-bold text-blue-900 mb-2">🔍 AI 即時搜尋的資料來源</div>';
+    const queries = sources.filter(s => s.query).map(s => s.query);
+    const urls = sources.filter(s => s.url);
+    if (queries.length > 0) {
+      html += '<div class="mb-2"><b>搜尋關鍵字：</b>' + queries.map(q => `<span class="badge bg-white text-blue-700 mr-1">${escapeHtml(q)}</span>`).join('') + '</div>';
+    }
+    if (urls.length > 0) {
+      html += '<div class="space-y-1"><b>引用網頁：</b>';
+      urls.slice(0, 8).forEach(s => {
+        html += `<a href="${escapeHtml(s.url)}" target="_blank" class="block text-blue-700 hover:underline truncate">• ${escapeHtml(s.title || s.url)}</a>`;
+      });
+      html += '</div>';
+    }
+    if (usage) {
+      html += `<div class="mt-2 pt-2 border-t border-blue-200 text-blue-600">Token：輸入 ${usage.input_tokens} / 輸出 ${usage.output_tokens}｜本次估算 $${((usage.input_tokens * 3 + usage.output_tokens * 15) / 1000000).toFixed(4)} USD</div>`;
+    }
+    html += '</div>';
+
+    // 插入到 highlighted-text 區塊上方
+    let container = $('ai-sources-display');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'ai-sources-display';
+      els.highlightedText.parentElement.insertBefore(container, els.highlightedText.parentElement.firstChild);
+    }
+    container.innerHTML = html;
+  }
+
   // ===== 自動配圖 =====
   function generateImages({ topic, contentTypeLabel, fullText, brand }) {
     if (typeof IMAGE_GEN === 'undefined') return;

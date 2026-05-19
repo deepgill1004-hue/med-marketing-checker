@@ -99,7 +99,8 @@
       <summary class="px-4 py-3 font-bold text-sm text-pink-700 flex items-center gap-2">
         <span class="text-lg">✨</span>
         <span>給主題自動生成爆款合規文案</span>
-        <span class="text-xs font-normal text-gray-500 ml-auto">▼ 展開／收合</span>
+        <button id="btn-settings" class="ml-auto text-xs font-normal text-gray-500 hover:text-pink-600" title="API 設定">⚙️ 設定</button>
+        <span class="text-xs font-normal text-gray-400">▼</span>
       </summary>
       <div class="px-4 pb-4 space-y-3">
         <!-- 合作診所切換 -->
@@ -144,14 +145,64 @@
           <label class="text-xs text-gray-600 block mb-1">比較對象</label>
           <input id="gen-compare" type="text" placeholder="例：肉毒、童顏針（會與主題比較）" class="w-full px-3 py-2 border border-pink-200 rounded-xl text-sm focus:border-pink-400">
         </div>
-        <button id="btn-generate" class="btn-primary w-full py-3 rounded-2xl font-bold text-sm">
-          ✨ 生成文案（自動套合規檢查）
-        </button>
-        <p class="text-xs text-gray-500 leading-relaxed">
-          生成的文案會自動：① 依平台調整長度 ② 套爆款 Hook + 結構模板 ③ 自動避開 108 條紅線詞 ④ 補合規 CTA ⑤ 再跑一次合規檢查確認乾淨
-        </p>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-generate" class="py-3 rounded-2xl font-medium text-sm bg-pink-100 text-pink-700 hover:bg-pink-200 transition">
+            📝 本地範本生成
+          </button>
+          <button id="btn-ai-generate" class="btn-primary py-3 rounded-2xl font-bold text-sm relative">
+            ✨ AI 即時生成
+            <span class="absolute -top-1 -right-1 bg-amber-400 text-[10px] text-white px-1.5 py-0.5 rounded-full">NEW</span>
+          </button>
+        </div>
+        <div class="text-xs text-gray-600 bg-white/60 rounded-xl p-2.5 space-y-1">
+          <div><b class="text-pink-700">📝 本地範本</b>：固定範本拼接，0 成本，秒回</div>
+          <div><b class="text-pink-700">✨ AI 即時</b>：自動搜衛福部最新公告／療程熱點／爆款參考 → 餵 Claude 即時生成。每次都不一樣、跟真實狀況接軌。需先在 ⚙️設定 貼上 API key</div>
+        </div>
       </div>
     </details>
+
+    <!-- 設定 Modal -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-base font-bold text-sophie-ink flex items-center gap-2">
+            <span>⚙️</span> AI 即時生成 — API 設定
+          </h3>
+          <button id="btn-close-settings" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+        </div>
+
+        <div class="space-y-4 text-sm">
+          <div class="bg-amber-50 rounded-xl p-3 text-xs text-amber-900 leading-relaxed">
+            <b>30 秒拿 API key（一次設定永久用）：</b>
+            <ol class="list-decimal pl-4 mt-1 space-y-1">
+              <li>點開 <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-pink-600 underline font-medium">console.anthropic.com/settings/keys</a></li>
+              <li>登入後點右上「Create Key」</li>
+              <li>取個名字（例如 sophie-marketing），點確認</li>
+              <li>複製整串 <code class="bg-white px-1 rounded">sk-ant-...</code> 開頭的字</li>
+              <li>貼到下方欄位 → 按儲存</li>
+            </ol>
+          </div>
+
+          <div>
+            <label class="text-xs text-gray-600 block mb-1">Anthropic API Key</label>
+            <input id="api-key-input" type="password" placeholder="sk-ant-api03-..." class="w-full px-3 py-2 border border-pink-200 rounded-xl text-sm font-mono focus:border-pink-400">
+            <p class="text-xs text-gray-500 mt-1">🔒 只存在妳的瀏覽器 localStorage，不會上傳到任何地方</p>
+          </div>
+
+          <div class="flex gap-2">
+            <button id="btn-test-api" class="flex-1 py-2 rounded-xl text-sm bg-gray-100 hover:bg-gray-200 transition">🔌 測試連線</button>
+            <button id="btn-save-api" class="flex-1 py-2 rounded-xl text-sm btn-primary font-bold">💾 儲存</button>
+            <button id="btn-clear-api" class="px-3 py-2 rounded-xl text-sm bg-red-50 text-red-600 hover:bg-red-100 transition">🗑️</button>
+          </div>
+
+          <div id="api-status" class="text-xs"></div>
+
+          <div class="text-xs text-gray-500 leading-relaxed border-t pt-3">
+            <b>成本參考</b>：每篇文案（含搜 5 次網路 + 生成 2000 字）約 $0.05-0.15 美元。Anthropic 新帳號通常送 $5 試用額度。
+          </div>
+        </div>
+      </div>
+    </div>
 
     <textarea
       id="input-text"
@@ -343,6 +394,7 @@
 <script src="data/generator.js"></script>
 <script src="data/clinic_lidai.js"></script>
 <script src="data/image_gen.js"></script>
+<script src="data/ai_generator.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
