@@ -158,59 +158,134 @@ window.IMAGE_GEN = {
     return c.toDataURL("image/png");
   },
 
-  // ===== 3. 從生成文案中抽重點（給 buildInfoCard 用）=====
-  extractPoints(text, max = 5) {
-    // 找 1./2./3. 或 「**」 開頭的條列
+  // ===== 排除非標題的噪音句子（內心獨白／前言／系統訊息）=====
+  isNoiseLine(s) {
+    if (!s) return true;
+    const noise = [
+      /^(資料齊了|資料已經|資料整理|資料完整|資料準備好)/,
+      /^(以下為|以下是|以下提供|以下內容|這就是|這份)/,
+      /^(我幫(您|你|妳)|我來幫|讓我來|為您|為你|為妳|我來|現在來|我會|讓我)/,
+      /^(最終文案|文案如下|文案內容|生成的文案|完整文案|文案結尾)/,
+      /^(根據(您|你|妳)的|根據主題|依據|依照|按照)/,
+      /^(好的|沒問題|了解|收到|當然|是的)/,
+      /^(這是一篇|這篇文案|這則文案|這篇貼文|這則貼文)/,
+      /^(?:===|---|\*\*\*|———|━━━)/,
+      /(開始生成|準備生成|現在開始|讓我們開始|完成了)/,
+    ];
+    return noise.some(re => re.test(s.trim()));
+  },
+
+  // ===== 智能封面標題抽取（排除噪音，找最有力的 Hook）=====
+  smartExtractTitle(text, topic) {
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-    const points = [];
     for (const ln of lines) {
-      // 數字列表（如 "1. xxx" / "1) xxx"）
-      let m = ln.match(/^(\d+)[\.\)、]\s*\*?\*?(.+?)\*?\*?$/);
-      if (m) {
-        const content = m[2].replace(/[\*【】「」『』]/g, "").trim();
-        if (content.length > 4 && content.length < 80) points.push(content);
+      if (this.isNoiseLine(ln)) continue;
+      // 去掉 emoji 前綴與 markdown
+      let clean = ln
+        .replace(/^[☀-➿\u{1F300}-\u{1FAFF}️]+\s*/u, "")
+        .replace(/\*\*/g, "")
+        .replace(/^[\-—\*•▶▌#]+\s*/, "")
+        .trim();
+      if (clean.length >= 6 && clean.length <= 40) return clean;
+      if (clean.length > 40) {
+        const cut = clean.split(/[，,。:：；;！!？?]/)[0];
+        if (cut.length >= 6 && cut.length <= 40) return cut;
       }
-      // 粗體標題（如 "**xxx**"）
-      else if (/^\*\*.+\*\*$/.test(ln)) {
-        const content = ln.replace(/\*\*/g, "").trim();
-        if (content.length > 4 && content.length < 50) points.push(content);
-      }
-      if (points.length >= max) break;
     }
-    // 若不足，從句子中切（依「。」分句後選 max 個有意義的）
+    return `${topic}｜值得知道的幾件事`;
+  },
+
+  // ===== 3. 從生成文案中抽重點（多格式 fallback）=====
+  extractPoints(text, max = 5) {
+    const points = [];
+    const paragraphs = text.split(/\n\s*\n/);
+
+    // (a) 合併「標題行+內容行」格式（如 Day 1\n腫脹瘀青）
+    for (const para of paragraphs) {
+      const lines = para.split("\n").map(l => l.trim()).filter(Boolean);
+      if (lines.length === 2) {
+        const head = lines[0].replace(/^[\*【「『]+|[\*】」』]+$/g, "");
+        const body = lines[1].replace(/^[\*【「『]+|[\*】」』]+$/g, "");
+        if (head.length < 20 && body.length > 6 && body.length < 80 &&
+            !this.isNoiseLine(head) && !this.isNoiseLine(body)) {
+          points.push(`${head}：${body}`);
+          if (points.length >= max) return points;
+        }
+      }
+    }
+
+    // (b) 單行條列：1./Day N/emoji/**粗體**/Q1
+    if (points.length < max) {
+      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+      for (const ln of lines) {
+        if (this.isNoiseLine(ln)) continue;
+        let content = null;
+        let m = ln.match(/^(\d+)[\.\)、]\s*\*?\*?(.+?)\*?\*?$/);
+        if (m) content = m[2];
+        if (!content) {
+          m = ln.match(/^(Day\s*\d+[-\d+]*)[\s::\-—]+(.+)$/i);
+          if (m) content = `${m[1]}：${m[2]}`;
+        }
+        if (!content && /^\*\*.+\*\*$/.test(ln)) {
+          content = ln.replace(/\*\*/g, "");
+        }
+        if (!content) {
+          m = ln.match(/^Q\d+[\s::\-—]+(.+)$/i);
+          if (m) content = m[1];
+        }
+        if (content) {
+          content = content.replace(/[\*【】「」『』]/g, "").trim();
+          if (content.length > 4 && content.length < 80 &&
+              !points.some(p => p.includes(content))) {
+            points.push(content);
+            if (points.length >= max) break;
+          }
+        }
+      }
+    }
+
+    // (c) 仍不足：抓實質完整句
     if (points.length < 3) {
       const sentences = text.replace(/\n/g, " ").split(/[。！？]/)
-        .map(s => s.trim()).filter(s => s.length > 12 && s.length < 60);
+        .map(s => s.trim())
+        .filter(s => s.length > 12 && s.length < 60 && !this.isNoiseLine(s));
       for (const s of sentences) {
         if (points.length >= max) break;
-        if (!points.includes(s)) points.push(s);
+        if (!points.some(p => p.includes(s) || s.includes(p))) points.push(s);
       }
     }
     return points.slice(0, max);
   },
 
-  // ===== 4. 主入口：依文案產 2 張圖 =====
-  generatePair({ topic, contentTypeLabel, fullText, brand, themePair }) {
+  // ===== 4. 主入口：優先用 AI 結構化 imagedata，沒有才 fallback =====
+  generatePair({ topic, contentTypeLabel, fullText, brand, themePair, imagedata }) {
     const tp = themePair || ["warm", "trust"];
 
-    // 取主標題（爆款 Hook 通常是文案第一句）
-    const firstLine = (fullText.split("\n").find(l => l.trim()) || topic).trim();
-    let coverTitle = firstLine.length > 30 ? topic + "｜知道這幾件事再做" : firstLine;
+    let coverTitle, coverSubtitle, points;
+    if (imagedata && imagedata.title) {
+      // 優先用 AI 結構化資料
+      coverTitle = imagedata.title;
+      coverSubtitle = imagedata.subtitle || `${topic} · ${contentTypeLabel}`;
+      points = Array.isArray(imagedata.points)
+        ? imagedata.points.filter(p => p && String(p).length > 4)
+        : [];
+    } else {
+      // Fallback：智能抽取
+      coverTitle = this.smartExtractTitle(fullText, topic);
+      coverSubtitle = `${topic} · ${contentTypeLabel}`;
+      points = this.extractPoints(fullText, 5);
+    }
 
-    // 封面
     const cover = this.buildCover({
       title: coverTitle,
-      subtitle: `${topic} · ${contentTypeLabel}`,
+      subtitle: coverSubtitle,
       badge: contentTypeLabel,
       brand,
       theme: tp[0],
     });
 
-    // 重點卡
-    const points = this.extractPoints(fullText, 5);
-    const infoTitle = `${topic}\n重點整理`;
     const infoCard = this.buildInfoCard({
-      title: infoTitle,
+      title: `${topic}\n重點整理`,
       points: points.length >= 3 ? points : [
         `${topic} 不是每個人都適合`,
         `效果與恢復期因人而異`,

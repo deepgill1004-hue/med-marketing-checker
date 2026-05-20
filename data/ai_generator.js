@@ -137,10 +137,32 @@ ${contentTypeGuide[ctx.contentTypeId] || contentTypeGuide["knowledge"]}
 ${clinicBlock}
 
 # 輸出規範
-- 直接輸出最終文案，不要解釋你做了什麼
+- 直接輸出最終文案，**第一行就是文案的爆 Hook**，不要寫「資料齊了」「以下為文案」「我幫您整理」這類前言
 - 文末不要加你的總結或備註
 - 若是 LINE OA，最後加上「─────」分隔線，下方寫「📤 _推播建議：[妳搜尋到的最佳時段]｜搭配貼圖建議：[依內容主題]_」（這部分給操盤者看）
-- 搜尋到的數據引用要清楚標示來源（如「依 PubMed XXXXX」「衛福部 2026 公告」）`;
+- 搜尋到的數據引用要清楚標示來源（如「依 PubMed XXXXX」「衛福部 2026 公告」）
+
+# ⚠️ 配圖資料輸出（極重要，必須執行）
+文案輸出完畢後，**換行加上分隔符 \`===IMAGE_DATA===\`，再加一個 JSON 物件**，給配圖系統用：
+
+\`\`\`
+===IMAGE_DATA===
+{
+  "title": "8-14 字最有力的 Hook 標題，當封面大字（不可超過 14 字、不可寫『以下為』『資料齊了』等廢話）",
+  "subtitle": "10-20 字副標（可選，與封面互補）",
+  "points": [
+    "重點 1：12-20 字完整可獨立閱讀的精華（含具體內容、不只是『Day 1』這種空標題）",
+    "重點 2：12-20 字完整可獨立閱讀的精華",
+    "重點 3：12-20 字完整可獨立閱讀的精華",
+    "重點 4：12-20 字完整可獨立閱讀的精華",
+    "重點 5：12-20 字完整可獨立閱讀的精華"
+  ]
+}
+\`\`\`
+
+**points 範例對照（這是錯與對）**：
+- ❌ 錯誤："Day 1"、"Day 7"、"懷疑期" ← 太短沒內容無法獨立看
+- ✅ 正確："Day 1-7：腫脹瘀青是正常的，穩住別亂塗"、"Day 30 容易懷疑無效，剛好是底層重塑期"`;
   },
 
   // ===== 主入口：呼叫 Claude API 即時生成 =====
@@ -212,8 +234,31 @@ ${ctx.compareWith ? "比較對象：" + ctx.compareWith : ""}
       }
     }
 
+    // 拆出 IMAGE_DATA（讓配圖用結構化資料而非 regex 從文案猜）
+    let text = finalText.trim();
+    let imagedata = null;
+    const splitMatch = text.split(/={3,}\s*IMAGE_?DATA\s*={3,}/i);
+    if (splitMatch.length > 1) {
+      text = splitMatch[0].trim();
+      try {
+        const jsonRaw = splitMatch[1]
+          .replace(/```json\s*/i, "")
+          .replace(/```/g, "")
+          .trim();
+        // 找到第一個 { 到最後一個 } 的範圍
+        const start = jsonRaw.indexOf("{");
+        const end = jsonRaw.lastIndexOf("}");
+        if (start !== -1 && end !== -1) {
+          imagedata = JSON.parse(jsonRaw.slice(start, end + 1));
+        }
+      } catch (e) {
+        console.warn("IMAGE_DATA JSON 解析失敗:", e);
+      }
+    }
+
     return {
-      text: finalText.trim(),
+      text,
+      imagedata,
       sources: searchSources,
       usage: data.usage,
       stopReason: data.stop_reason,

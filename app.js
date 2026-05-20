@@ -683,7 +683,7 @@
       // 跑合規檢查
       els.btnCheck.click();
 
-      // 自動配圖
+      // 自動配圖（優先用 AI 結構化 imagedata）
       const ct = GENERATOR.content_types[typeId];
       setTimeout(() => {
         generateImages({
@@ -691,6 +691,7 @@
           contentTypeLabel: ct.label,
           fullText: state.text,
           brand: useClinic ? "麗得醫美整形外科 · 蘇菲 IP" : "蘇菲 IP",
+          imagedata: result.imagedata,
         });
 
         // 顯示搜尋來源
@@ -740,16 +741,16 @@
   }
 
   // ===== 自動配圖 =====
-  function generateImages({ topic, contentTypeLabel, fullText, brand }) {
+  function generateImages({ topic, contentTypeLabel, fullText, brand, imagedata }) {
     if (typeof IMAGE_GEN === 'undefined') return;
     const themeSel = $('image-theme');
     const pair = (themeSel?.value || 'warm-trust').split('-');
     const imgs = IMAGE_GEN.generatePair({
-      topic, contentTypeLabel, fullText, brand, themePair: pair
+      topic, contentTypeLabel, fullText, brand, themePair: pair, imagedata,
     });
     renderImages(imgs);
-    // 暫存最新生圖參數，供「重新生圖」按鈕使用
-    state.lastImageParams = { topic, contentTypeLabel, fullText, brand };
+    // 暫存最新生圖參數（含 imagedata），供「重新生圖」按鈕使用
+    state.lastImageParams = { topic, contentTypeLabel, fullText, brand, imagedata };
   }
 
   function renderImages(imgs) {
